@@ -1,1 +1,8 @@
-
+pandas
+logging
+datetime
+openmeteo_requests
+requests_cache
+pyodbc
+plotly.express
+dash_bootstrap_components 
