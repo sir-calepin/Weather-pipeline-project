@@ -4,9 +4,9 @@ from dash import Dash, dcc, html, Input, Output, State, callback_context, no_upd
 import plotly.express as px
 import dash_bootstrap_components as dbc
 
-# ========================================================
+# =========================================================
 # 1. DATABASE CONFIGURATION
-# ========================================================
+# =========================================================
 SERVER = "SERVER_NAME"
 DATABASE = "WeatherPipelineDB"
 DRIVER = "{ODBC Driver 17 for SQL Server}"
