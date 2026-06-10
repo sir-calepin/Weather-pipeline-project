@@ -146,7 +146,7 @@ This schema is normalized to approximately Third Normal Form:
 
 ## ER Diagram
 
-![Architecture diagram](<../diagrams/Architecture diagram.png>)
+![ERD](../diagrams/ERD.png)
 
 ## Data Source
 
