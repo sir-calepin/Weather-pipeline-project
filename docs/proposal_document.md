@@ -2,8 +2,6 @@
 
 ## Project Proposal
 
-### Developer
-Caleb Adewale
 
 ## Introduction / Background
 
