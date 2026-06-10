@@ -64,7 +64,7 @@ The dashboard will prioritize a small number of polished visual outputs. Planned
 ## ETL Architecture Diagram
 
 The ETL architecture shows Open-Meteo as the source API, Python as the ETL layer, Microsoft SQL Server as the primary database, CSV as the backup output, and Dash as the visualization layer. A scheduled refresh can trigger the pipeline on a daily or on-demand basis.
-
+![Architecture diagram](../diagrams/Architecture diagram.png)
 ## Timeline
 
 | Week | Planned Activities |
