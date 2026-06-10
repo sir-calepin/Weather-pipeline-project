@@ -105,7 +105,7 @@ Update your connection settings for Microsoft SQL Server in the application scri
 ### 5. Run the Dash app
 
 ```bash
-python app.py
+dash_script.py
 ```
 
 If port 8050 is busy, run the app on another port such as 8051.
