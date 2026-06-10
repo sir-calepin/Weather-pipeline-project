@@ -20,11 +20,15 @@ def get_connection():
     )
     return pyodbc.connect(conn_str)
 
+import pandas as pd
+import pyodbc
+from dash import Dash, dcc, html, Input, Output, callback_context
+import plotly.express as px
+import dash_bootstrap_components as dbc
+
 # =========================================================
 # 2. OPTIONAL ETL REFRESH HOOK
 # =========================================================
-# If you want the dashboard button to trigger your ETL first,
-# replace the body of this function with your ETL script call.
 def run_etl_refresh():
     # Example:
     # from my_etl_script import run_pipeline
@@ -32,7 +36,75 @@ def run_etl_refresh():
     pass
 
 # =========================================================
-# 3. QUERY REFRESHED DATA FROM SQL SERVER
+# 3. WEATHER CODE + OUTDOOR PLANNING HELPERS
+# =========================================================
+def weather_code_description(code):
+    code_map = {
+        0: "Clear sky",
+        1: "Mainly clear",
+        2: "Partly cloudy",
+        3: "Overcast",
+        45: "Fog",
+        48: "Depositing rime fog",
+        51: "Light drizzle",
+        53: "Moderate drizzle",
+        55: "Dense drizzle",
+        56: "Light freezing drizzle",
+        57: "Dense freezing drizzle",
+        61: "Slight rain",
+        63: "Moderate rain",
+        65: "Heavy rain",
+        66: "Light freezing rain",
+        67: "Heavy freezing rain",
+        71: "Slight snow fall",
+        73: "Moderate snow fall",
+        75: "Heavy snow fall",
+        77: "Snow grains",
+        80: "Slight rain showers",
+        81: "Moderate rain showers",
+        82: "Violent rain showers",
+        85: "Slight snow showers",
+        86: "Heavy snow showers",
+        95: "Thunderstorm",
+        96: "Thunderstorm with slight hail",
+        99: "Thunderstorm with heavy hail"
+    }
+    return code_map.get(code, "Unknown weather condition")
+
+def classify_outdoor_condition(row):
+    temp = row.get("temperature")
+    precip = row.get("precipitation", 0)
+    rain_prob = row.get("rainfall_probability", 0)
+    wind = row.get("wind_speed", 0)
+    cloud = row.get("cloud_cover", 0)
+    code = row.get("weather_code")
+
+    poor_codes = {65, 67, 75, 82, 86, 95, 96, 99}
+    caution_codes = {2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 66, 71, 73, 77, 80, 81, 85}
+
+    if (
+        code in poor_codes
+        or (pd.notna(temp) and (temp < 45 or temp > 90))
+        or (pd.notna(precip) and precip >= 0.15)
+        or (pd.notna(rain_prob) and rain_prob >= 70)
+        or (pd.notna(wind) and wind >= 20)
+    ):
+        return "Poor", "danger", "Outdoor conditions are unfavorable."
+
+    elif (
+        code in caution_codes
+        or (pd.notna(temp) and (temp < 55 or temp > 85))
+        or (pd.notna(precip) and precip > 0)
+        or (pd.notna(rain_prob) and rain_prob >= 35)
+        or (pd.notna(wind) and wind >= 12)
+        or (pd.notna(cloud) and cloud >= 85)
+    ):
+        return "Caution", "warning", "Conditions are mixed; plan with caution."
+
+    return "Favorable", "success", "Weather looks suitable for outdoor activity."
+
+# =========================================================
+# 4. QUERY REFRESHED DATA FROM SQL SERVER
 # =========================================================
 def load_weather_data():
     query = """
@@ -45,7 +117,8 @@ def load_weather_data():
         w.wind_speed,
         w.cloud_cover,
         w.precipitation,
-        w.rainfall_probability
+        w.rainfall_probability,
+        w.weather_code
     FROM dbo.weather_observation w
     INNER JOIN dbo.location l
         ON w.location_id = l.location_id
@@ -60,13 +133,13 @@ def load_weather_data():
     return df
 
 # =========================================================
-# 4. APP SETUP
+# 5. APP SETUP
 # =========================================================
 app = Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
 app.title = "Louisville Weather Dashboard"
 
 # =========================================================
-# 5. REUSABLE KPI CARD
+# 6. REUSABLE KPI CARD
 # =========================================================
 def kpi_card(title, value, subtitle, color):
     return dbc.Card(
@@ -83,7 +156,7 @@ def kpi_card(title, value, subtitle, color):
     )
 
 # =========================================================
-# 6. LAYOUT
+# 7. LAYOUT
 # =========================================================
 app.layout = dbc.Container([
     dcc.Interval(id="refresh-interval", interval=5 * 60 * 1000, n_intervals=0),
@@ -146,6 +219,10 @@ app.layout = dbc.Container([
     ], className="mb-4"),
 
     dbc.Row([
+        dbc.Col(html.Div(id="planning-panel"), md=12)
+    ], className="mb-4"),
+
+    dbc.Row([
         dbc.Col([
             dbc.Card([
                 dbc.CardHeader("Hourly Temperature Trend", className="fw-bold"),
@@ -185,7 +262,7 @@ app.layout = dbc.Container([
 })
 
 # =========================================================
-# 7. REFRESH BUTTON / AUTO REFRESH TRIGGER
+# 8. REFRESH BUTTON / AUTO REFRESH TRIGGER
 # =========================================================
 @app.callback(
     Output("refresh-trigger", "data"),
@@ -197,7 +274,6 @@ app.layout = dbc.Container([
 def trigger_refresh(n_clicks, n_intervals):
     trigger = callback_context.triggered[0]["prop_id"].split(".")[0] if callback_context.triggered else "refresh-interval"
 
-    # Optional ETL call on manual refresh
     if trigger == "refresh-button":
         run_etl_refresh()
         return (
@@ -211,7 +287,7 @@ def trigger_refresh(n_clicks, n_intervals):
     )
 
 # =========================================================
-# 8. INITIALIZE FILTER OPTIONS
+# 9. INITIALIZE FILTER OPTIONS
 # =========================================================
 @app.callback(
     Output("location-filter", "options"),
@@ -235,12 +311,13 @@ def initialize_filters(refresh_data):
     return location_options, default_location, start_date, end_date
 
 # =========================================================
-# 9. MAIN DASHBOARD CALLBACK
+# 10. MAIN DASHBOARD CALLBACK
 # =========================================================
 @app.callback(
     Output("kpi-latest-temp", "children"),
     Output("kpi-avg-humidity", "children"),
     Output("kpi-total-precip", "children"),
+    Output("planning-panel", "children"),
     Output("temperature-chart", "figure"),
     Output("rain-prob-chart", "figure"),
     Output("precipitation-chart", "figure"),
@@ -269,6 +346,12 @@ def update_dashboard(location_value, start_date, end_date, refresh_data):
             kpi_card("Latest Temperature", "N/A", "No matching records", "#0d6efd"),
             kpi_card("Average Humidity", "N/A", "No matching records", "#17a2b8"),
             kpi_card("Total Precipitation", "N/A", "No matching records", "#198754"),
+            dbc.Alert(
+                "No planning guidance available for the selected filters.",
+                color="secondary",
+                className="shadow-sm",
+                style={"borderRadius": "14px"}
+            ),
             empty_fig,
             empty_fig,
             empty_fig,
@@ -276,6 +359,7 @@ def update_dashboard(location_value, start_date, end_date, refresh_data):
         )
 
     latest_row = df.sort_values("forecast_timestamp").iloc[-1]
+
     latest_temp = f"{latest_row['temperature']:.1f} °F" if pd.notna(latest_row["temperature"]) else "N/A"
     avg_humidity = f"{df['humidity'].mean():.1f} %" if df["humidity"].notna().any() else "N/A"
     total_precip = f"{df['precipitation'].sum():.2f} in" if df["precipitation"].notna().any() else "N/A"
@@ -283,6 +367,21 @@ def update_dashboard(location_value, start_date, end_date, refresh_data):
     latest_temp_card = kpi_card("Latest Temperature", latest_temp, "Most recent hourly forecast", "#0d6efd")
     avg_humidity_card = kpi_card("Average Humidity", avg_humidity, "Across selected records", "#17a2b8")
     total_precip_card = kpi_card("Total Precipitation", total_precip, "Accumulated over selected period", "#198754")
+
+    planning_status, planning_color, planning_message = classify_outdoor_condition(latest_row)
+    weather_desc = weather_code_description(latest_row["weather_code"]) if pd.notna(latest_row["weather_code"]) else "Unknown weather condition"
+
+    planning_panel = dbc.Alert([
+        html.H5(f"Outdoor Planning Status: {planning_status}", className="mb-1"),
+        html.Div(planning_message, className="mb-2"),
+        html.Small(
+            f"Weather: {weather_desc} | "
+            f"Temp: {latest_row['temperature']:.1f} °F | "
+            f"Rain Prob: {latest_row['rainfall_probability']:.0f}% | "
+            f"Wind: {latest_row['wind_speed']:.1f} mph | "
+            f"Cloud Cover: {latest_row['cloud_cover']:.0f}%"
+        )
+    ], color=planning_color, className="shadow-sm", style={"borderRadius": "14px"})
 
     fig_temp = px.line(
         df,
@@ -322,7 +421,7 @@ def update_dashboard(location_value, start_date, end_date, refresh_data):
         y="wind_speed",
         color="temperature",
         color_continuous_scale="Blues",
-        hover_data=["forecast_timestamp", "precipitation", "rainfall_probability"],
+        hover_data=["forecast_timestamp", "precipitation", "rainfall_probability", "weather_code"],
         title="Humidity vs Wind Speed"
     )
     fig_scatter.update_layout(template="plotly_white", margin=dict(l=20, r=20, t=55, b=20))
@@ -333,6 +432,7 @@ def update_dashboard(location_value, start_date, end_date, refresh_data):
         latest_temp_card,
         avg_humidity_card,
         total_precip_card,
+        planning_panel,
         fig_temp,
         fig_rain_prob,
         fig_precip,
@@ -340,7 +440,7 @@ def update_dashboard(location_value, start_date, end_date, refresh_data):
     )
 
 # =========================================================
-# 10. RUN APP
+# 11. RUN APP
 # =========================================================
 if __name__ == "__main__":
     app.run(debug=True, port=8051)
