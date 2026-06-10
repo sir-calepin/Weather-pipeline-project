@@ -150,7 +150,7 @@ This schema is normalized to approximately Third Normal Form:
 
 ## Data Source
 
-Weather forecast data is sourced from the Open-Meteo API, which the proposal identifies as the project's primary data source. The API provides hourly weather data, temperature values, humidity values, wind speed values, cloud cover values, precipitation values, weather codes, and coordinate-based forecast retrieval using latitude and longitude.
+Weather forecast data is obtained from the Open-Meteo API, the project's primary data source. The API provides hourly weather data, temperature values, humidity values, wind speed values, cloud cover values, precipitation values, weather codes, and coordinate-based forecast retrieval using latitude and longitude.
 
 ## Example Relationship Flow
 
