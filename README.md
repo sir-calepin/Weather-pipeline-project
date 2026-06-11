@@ -124,6 +124,15 @@ dash-bootstrap-components
 python-dotenv
 ```
 
+## API Reference
+
+Open-Meteo API: https://open-meteo.com/en/docs
+
+- Free access (no authentication required)
+- Generous rate limits for educational use
+- Support multiple eather variables and locations
+
+
 ## Business Insights
 
 This dashboard turns raw weather forecasts into decision-ready information. It helps users identify favorable outdoor windows, monitor rainfall risk, compare conditions over time, and understand how wind or humidity may affect planning. The SQL-backed design also supports reliable refreshes, so the dashboard reflects the latest available weather data.
